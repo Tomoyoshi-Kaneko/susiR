@@ -1,0 +1,30 @@
+Package: susiR
+Title: Standardized Quantification of Phage Lytic Sustainability, Virulence, and Suppression from Microplate Growth-Curve Data
+Version: 0.1.0
+Authors@R: person("Tomoyoshi", "Kaneko", email = "kanekotomoyoshi@akane.waseda.jp", role = c("aut", "cre"))
+Description: Reads microplate (OD) growth-curve time-course data together with a
+    user-supplied sample-mapping table and automatically computes four
+    complementary phage-efficacy indices: the Sustainability Index (SusI),
+    Virulence Index (VI; Storms et al. 2020), Suppression Index (SupI; Kim
+    et al. 2024), and the ti/tc time ratio. Experimental structure (condition
+    labels, number of conditions, number and layout of biological replicates)
+    is inferred automatically from the mapping table rather than hard-coded,
+    so a single, unmodified analysis pipeline works across arbitrary plate
+    layouts and experimental designs.
+License: MIT
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.1
+Imports:
+    openxlsx,
+    dplyr,
+    tidyr,
+    rlang,
+    xml2
+Suggests:
+    shiny,
+    DT,
+    ggplot2,
+    patchwork,
+    readxl,
+    testthat (>= 3.0.0)

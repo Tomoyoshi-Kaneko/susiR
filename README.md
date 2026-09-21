@@ -2,208 +2,514 @@
 
 **susiR** computes four complementary indices of bacteriophage lytic activity from microplate (optical density) growth-curve time-course data:
 
-- **SusI** (Sustainability Index) — duration and depth of lysis suppression, from lysis onset (t0) to resistance emergence (ti)
+- **SusI** (Sustainability Index) — duration and depth of lysis suppression, from lysis onset (`t0`) to resistance emergence (`ti`)
 - **VI** (Virulence Index) — early infection dynamics, following Storms et al. (2020)
 - **SupI** (Suppression Index) — overall growth suppression over a defined observation window, following Kim et al. (2024)
 - **ti/tc** — a time-ratio metric relating suppression duration to the control culture's normal growth cycle
 
-susiR is the companion software for the Sustainability Index manuscript (Kaneko et al., in preparation). Unlike the original analysis scripts developed for that study, susiR makes no assumptions about experimental design: the number of conditions, their labels, and the number and layout of biological replicates are all inferred from a user-supplied sample-mapping table at run time, so the same code handles arbitrary plate layouts without modification.
+susiR is the companion software for the Sustainability Index manuscript (Kaneko et al., in preparation). Unlike the original analysis scripts developed for that study, susiR makes no assumptions about experimental design: the number of conditions, their labels, and the number and layout of biological replicates are inferred from a user-supplied sample-mapping table at run time, so the same code can handle different plate layouts without modification.
 
-## Key features
+---
+
+## Try susiR first — no programming required
+
+If you are not familiar with R or programming, **you do not need to install anything to try susiR**.
+
+### Use the web application
+
+Open the susiR web application in your browser:
+
+** [Launch susiR](https://01a0aedc-8749-7813-9276-04c501bdd47d.share.connect.posit.cloud/)**
+
+The web application provides a point-and-click workflow for uploading data, checking the plate layout, adjusting analysis parameters, viewing diagnostic plots, and downloading results.
+
+### Start with the example data
+
+The easiest way to understand the workflow is to start with the bundled **T1 example dataset**:
+
+[`inst/extdata/T1_rawdata.xlsx`](inst/extdata/T1_rawdata.xlsx)
+
+You can use the example data directly in the web application where the sample/example-data options are provided.
+
+The T1 workbook is also a useful **template for preparing your own input file**. If you have data from another experiment, you can create a workbook that follows the same basic structure as `T1_rawdata.xlsx`, or use the application's plate-map editor and raw-format importer where appropriate.
+
+> **In short:** if you just want to try the software, open the web app and start with the T1 example. If you want to analyze your own experiment, you can either prepare an Excel file in the same format as T1 or use the tools provided in the app to help prepare it.
+
+---
+
+## What can susiR do?
+
+### Key features
 
 - **Flexible replicate count.** Biological replicates are not fixed at 3. An explicit `bio_rep` column in the mapping sheet is used exactly as given — 1, 2, 4, or any other number, arranged however the wells were laid out.
-- **Flexible replicate layout.** Because replicate membership can be declared per well, replicates need not occupy a fixed, contiguous block of plate columns. Without a `bio_rep` column, susiR falls back to a positional convention (consecutive blocks of 12 wells per condition, in plate order), adapting automatically to however many wells a condition has.
-- **Flexible condition labels.** Conditions are never assumed to be an MOI dilution series. A single sheet can equally contain several phages tested at one fixed MOI, or any other labeling scheme; every distinct label in the mapping sheet is treated as one condition. The MOI-dependent global VI/MV50 dose-response fit is computed only when condition labels parse as a numeric MOI series (checked automatically); local, per-condition SusI/VI/SupI/ti-tc are always computed.
-- **Import from any plate reader.** Raw exports in unfamiliar layouts (unknown sheet name, header row, well-ID spelling, time units) can be auto-converted into the format susiR expects — see "Importing from other plate readers" below.
-- **Point-and-click interface.** A bundled Shiny application provides the full workflow — upload, automatic condition/replicate detection, parameter tuning, diagnostic plots, and results download — without writing R code.
 
-## Getting started
+- **Flexible replicate layout.** Because replicate membership can be declared per well, replicates do not need to occupy a fixed, contiguous block of plate columns. Without a `bio_rep` column, susiR falls back to a positional convention (consecutive blocks of 12 wells per condition, in plate order).
 
-No package installation step is required to try susiR — source the files in `R/` directly:
+- **Flexible condition labels.** Conditions are not assumed to be an MOI dilution series. A sheet can contain several phages tested at one fixed MOI, or any other labeling scheme. Every distinct label in the mapping sheet is treated as a condition. The MOI-dependent global VI/MV50 dose-response fit is computed only when condition labels can be interpreted as a numeric MOI series; local, per-condition SusI/VI/SupI/ti-tc are still computed for other labeling schemes.
 
-```r
-for (f in list.files("R", full.names = TRUE)) source(f)
-```
+- **Import from different plate readers.** Raw exports with different sheet names, header rows, well-ID formats, and time units can be converted into the format expected by susiR.
 
-(A standard package build via `devtools::load_all()` or `R CMD build` also works, since the functions are documented with standard roxygen-style comments.)
+- **Visual plate-map editor.** The Shiny application provides an interactive alternative to preparing the `name` sheet manually.
 
-## Input format
+- **Grouped analysis.** Multiple hosts or strains can be analyzed separately when they are present in the same workbook and each group has its own control.
 
-**OD sheet** (default name `"R"`): first column `Time`, every other column one well. `Time` may be a plain number (interpreted as elapsed seconds) or a genuine Excel time/duration cell (e.g. formatted as `[h]:mm`); `read_plate_data()` inspects the workbook's actual cell formatting to distinguish these automatically (`time_unit = "auto"`, the default), since `openxlsx` returns a different raw number for each and treating one as the other would silently corrupt every downstream time value by a factor of 86400.
+- **Point-and-click interface.** The bundled Shiny application provides the full workflow — upload, condition/replicate detection, parameter tuning, diagnostic plots, and results download — without writing R code.
 
-**Mapping sheet** (default name `"name"`): one row per well.
+---
+
+## Input data
+
+susiR expects an Excel workbook with two main sheets:
+
+1. an **OD data sheet**, normally named `R`
+2. a **sample-mapping sheet**, normally named `name`
+
+The exact sheet and column names can be configured when using the R functions.
+
+### OD sheet
+
+The default OD sheet is named `R`.
+
+| Column | Meaning |
+|---|---|
+| `Time` | Measurement time |
+| Other columns | One column for each well |
+
+`Time` can be either:
+
+- a plain number interpreted as elapsed seconds, or
+- a genuine Excel time/duration cell, such as a cell formatted as `[h]:mm`.
+
+`read_plate_data()` automatically inspects the workbook's cell formatting when `time_unit = "auto"` (the default), so Excel duration values are not accidentally interpreted as seconds.
+
+### Mapping sheet
+
+The default mapping sheet is named `name`. It contains one row per well.
 
 | Column | Required? | Meaning |
 |---|---|---|
-| `num` | yes | Well ID (must match a column in the OD sheet) |
-| `sample` | yes | Condition label — any text, no fixed vocabulary |
-| `bio_rep` | no | Explicit biological-replicate ID. Omit entirely to use the positional fallback (blocks of 12 wells, plate order). If present, must be filled in for every well of a given condition. |
+| `num` | Yes | Well ID; must match a column in the OD sheet |
+| `sample` | Yes | Condition label; any text is allowed |
+| `bio_rep` | No | Explicit biological-replicate ID |
 
-Column names are configurable via `well_col`, `condition_col`, `bio_rep_col` if a sheet uses different headers.
+If `bio_rep` is omitted, susiR uses the positional fallback: consecutive blocks of 12 wells per condition, in plate order.
 
-### Importing from other plate readers
+If `bio_rep` is present, it should be filled in for every well belonging to the relevant condition.
 
-Raw exports from plate-reader software rarely match the shape above directly — each has its own sheet name, a header row buried under instrument metadata, well IDs spelled differently (`A1`, `A:1`, `A01`, or embedded in a longer label such as `"Sample0001 (B02)"`), and a time column with its own units. `susi_import_raw()` converts an arbitrary raw export into the expected shape:
+Column names can be changed with `well_col`, `condition_col`, and `bio_rep_col`.
+
+### Preparing your own file
+
+For users who are unfamiliar with programming, the simplest approach is to use the bundled T1 workbook as a template:
+
+[`inst/extdata/T1_rawdata.xlsx`](inst/extdata/T1_rawdata.xlsx)
+
+You can copy its structure and replace the OD measurements and sample labels with those from your own experiment.
+
+You do **not** have to reproduce the original T1 experimental design. The important point is to preserve the relationship between the OD well columns and the corresponding rows in the mapping sheet.
+
+---
+
+## Importing data from other plate readers
+
+Raw exports from plate-reader software often do not match the input format above. Different instruments may use different sheet names, header rows, well-ID formats, and time units.
+
+`susi_import_raw()` can convert many such exports into a susiR-compatible workbook:
 
 ```r
-susi_import_raw("my_raw_export.xlsx", output_path = "converted.xlsx")
-#> Imported from sheet 'Results Table' (header row 7): 96 wells, time
-#> column 'Row time (sec)' (unit: seconds, detected via header_text),
-#> 0.00 to 24.50 hours over 99 points.
-#> Wrote converted.xlsx -- fill in the 'sample' (and optionally 'bio_rep')
-#> column in its 'name' sheet, then use it with read_plate_data()/run_susi()
-#> as normal.
+susi_import_raw(
+  "my_raw_export.xlsx",
+  output_path = "converted.xlsx"
+)
 ```
 
-It scans every sheet for a row containing a time label (English or Japanese: "time"/"時間", "sec"/"秒", "min"/"分") and at least six well-ID-like column headers, drops everything else (temperature columns, read-type/read-number columns, trailing metadata), and writes a workbook with a ready-to-use `"R"` sheet plus a `"name"` sheet template (well IDs filled in; `sample`/`bio_rep` left blank, since experimental design assignment always requires a human). The printed summary should be checked against expectations before the result is used further; a low-confidence match fails with an explicit error rather than guessing.
+For example, the importer can recognize well IDs such as:
 
-Validated against exports from three different instruments: a BioTek/Agilent Epoch2 reader (multi-row metadata preamble, Excel-duration time column), a Promega reader (distinct column layout, `A:1`-style well IDs, embedded control characters in headers — parsed via the `readxl` package as a fallback where `openxlsx` fails), and a Thermo Fisher SkanIt export in Japanese with a sparse, non-contiguous well selection and well IDs embedded inside longer sample labels. If a file's layout is too unusual for automatic detection, either pass `sheet =` to indicate the correct tab, or convert the file by hand to match the bundled example (`inst/extdata/T1_rawdata.xlsx`).
+- `A1`
+- `A:1`
+- `A01`
+- well IDs embedded in longer labels such as `"Sample0001 (B02)"`
 
-The Shiny application (below) includes an equivalent "Import a raw plate-reader export" section.
+It searches workbook sheets for a plausible time row and well columns, removes unrelated metadata columns, and writes a workbook containing:
 
-## Usage
+- an `R` sheet with the converted OD/time data
+- a `name` sheet containing the detected well IDs, ready for sample assignment
+
+The importer recognizes common English and Japanese time labels such as `time` / `時間`, `sec` / `秒`, and `min` / `分`.
+
+The printed import summary should always be checked before using the converted file. If the match is too uncertain, the importer fails explicitly rather than silently guessing.
+
+The importer has been validated against exports from:
+
+- BioTek/Agilent Epoch2
+- Promega
+- Thermo Fisher SkanIt, including Japanese-language exports
+
+If an export is too unusual for automatic detection, you can specify the appropriate sheet with `sheet =`, or convert the file manually to match the bundled T1 example.
+
+The Shiny application also provides an **"Import a raw plate-reader export"** workflow.
+
+---
+
+## Using susiR from R
+
+The web application is the recommended starting point for users who do not use R.
+
+For R users, susiR can be used directly from the repository without installing it as a package:
 
 ```r
-for (f in list.files("R", full.names = TRUE)) source(f)
+for (f in list.files("R", full.names = TRUE)) {
+  source(f)
+}
+```
 
-## Bundled example data, no bio_rep column -> positional fallback (3 x 12)
-res <- run_susi("inst/extdata/T1_rawdata.xlsx",
-                 control_label = "Ct", exclude = "free",
-                 calculation_method = "biological_replicates",
-                 time_limit_hours = 24)
-res$summary        # SusI / VI_local / SupI / ti_tc per condition (+ per bio_rep rows)
-res$global_vi      # VI / MV50 across the MOI series (auto-detected as applicable here)
+A standard package workflow using `devtools::load_all()` or `R CMD build` is also possible.
 
-## Custom data with an explicit, irregular replicate structure
-## (e.g. 2 biological replicates of different sizes) -- add a `bio_rep`
-## column to the mapping sheet; no code changes needed.
-res2 <- run_susi("my_plate.xlsx", control_label = "Ct")
+---
 
-## Several phages at one fixed MOI, in a single sheet -- conditions are
-## treated as labels; global VI/MV50 (which needs a numeric MOI series) is
-## skipped automatically, with an explanatory message, while
-## SusI/VI/SupI/ti-tc are still computed per phage.
-res3 <- run_susi("cocktail_screen.xlsx", control_label = "Ct")
+## Basic usage
+
+### T1 example
+
+The bundled T1 dataset does not contain an explicit `bio_rep` column, so susiR uses the positional fallback.
+
+```r
+res <- run_susi(
+  "inst/extdata/T1_rawdata.xlsx",
+  control_label = "Ct",
+  exclude = "free",
+  calculation_method = "biological_replicates",
+  time_limit_hours = 24
+)
+
+res$summary
+res$global_vi
+```
+
+`res$summary` contains SusI, local VI, SupI, and ti/tc results by condition, including biological-replicate summaries where applicable.
+
+`res$global_vi` contains the global VI/MV50 analysis when the condition labels form an applicable numeric MOI series.
+
+### Custom data with explicit biological replicates
+
+If your experiment has an irregular replicate structure, add a `bio_rep` column to the mapping sheet. No changes to the analysis code are required.
+
+```r
+res2 <- run_susi(
+  "my_plate.xlsx",
+  control_label = "Ct"
+)
+```
+
+### Several phages at one fixed MOI
+
+Conditions do not have to be an MOI dilution series.
+
+```r
+res3 <- run_susi(
+  "cocktail_screen.xlsx",
+  control_label = "Ct"
+)
+
 res3$global_vi$note
-
-## Fast parameter tuning without computing indices:
-diag <- diagnose_conditions("inst/extdata/T1_rawdata.xlsx", control_label = "Ct", exclude = "free",
-                             output_excel = "T1_diagnosis.xlsx")
 ```
+
+In this situation, the global VI/MV50 dose-response analysis is skipped because a numeric MOI series is not available, while the local SusI/VI/SupI/ti-tc calculations remain available for each condition.
+
+### Diagnose conditions before running the full analysis
+
+For fast parameter tuning and quality control:
+
+```r
+diag <- diagnose_conditions(
+  "inst/extdata/T1_rawdata.xlsx",
+  control_label = "Ct",
+  exclude = "free",
+  output_excel = "T1_diagnosis.xlsx"
+)
+```
+
+---
 
 ## Plotting
 
-Functions in `R/plotting.R` and `R/plotting_summary.R` (require `ggplot2` and `patchwork`) turn results into figures:
+Functions in `R/plotting.R` and `R/plotting_summary.R` generate diagnostic and summary figures. These functions require `ggplot2` and `patchwork`.
+
+### Per-condition diagnostic plot
 
 ```r
-## Per-condition diagnostic view: control vs. treated OD curves with
-## t0/ti/tc marked and the SusI numerator area shaded
-plot_condition("inst/extdata/T1_rawdata.xlsx", condition = "10^0",
-                control_label = "Ct", time_limit_hours = 24)
-plot_all_conditions("inst/extdata/T1_rawdata.xlsx", control_label = "Ct", exclude = "free",
-                     time_limit_hours = 24, output_file = "diagnostic_overview.png")
-
-## Every condition's mean curve on one plot, as mean +/- SD across
-## biological replicates
-plot_combined_curves("inst/extdata/T1_rawdata.xlsx", control_label = "Ct", exclude = "free",
-                      time_limit_hours = 24)
-
-## The indices as charts (2x2 grid: SusI/VI/SupI/ti-tc)
-res <- run_susi("inst/extdata/T1_rawdata.xlsx", control_label = "Ct", exclude = "free",
-                 calculation_method = "biological_replicates", time_limit_hours = 24)
-plot_metrics_summary(res)
-
-## Well- and replicate-level view: individual wells (circles), each
-## biological replicate's mean (coloured triangle), and the condition mean
-## +/- SE (black diamond and error bar) -- within- and between-replicate
-## variability visible together, in the same style used in the companion
-## manuscript's figures.
-plot_metric_superplot("inst/extdata/T1_rawdata.xlsx", control_label = "Ct", exclude = "free",
-                       time_limit_hours = 24)
-plot_metric_superplot("inst/extdata/T1_rawdata.xlsx", metrics = "SusI",
-                       control_label = "Ct", exclude = "free", time_limit_hours = 24)
+plot_condition(
+  "inst/extdata/T1_rawdata.xlsx",
+  condition = "10^0",
+  control_label = "Ct",
+  time_limit_hours = 24
+)
 ```
 
-`plot_combined_curves()`, `plot_metrics_summary()`, and `plot_metric_superplot()` adapt automatically to the condition labels: a numeric MOI series is colour-graded and positioned by log10(MOI); any other labeling scheme falls back to categorical colour/bar/point charts. `plot_metric_superplot()` runs `run_susi()` internally at both the `individual_wells` and `biological_replicates` levels, so it takes somewhat longer than the other plotting functions.
+### All conditions
+
+```r
+plot_all_conditions(
+  "inst/extdata/T1_rawdata.xlsx",
+  control_label = "Ct",
+  exclude = "free",
+  time_limit_hours = 24,
+  output_file = "diagnostic_overview.png"
+)
+```
+
+### Combined growth curves
+
+```r
+plot_combined_curves(
+  "inst/extdata/T1_rawdata.xlsx",
+  control_label = "Ct",
+  exclude = "free",
+  time_limit_hours = 24
+)
+```
+
+The plot shows each condition's mean growth curve, with mean ± SD across biological replicates.
+
+### Index summary
+
+```r
+res <- run_susi(
+  "inst/extdata/T1_rawdata.xlsx",
+  control_label = "Ct",
+  exclude = "free",
+  calculation_method = "biological_replicates",
+  time_limit_hours = 24
+)
+
+plot_metrics_summary(res)
+```
+
+### Well- and replicate-level superplot
+
+```r
+plot_metric_superplot(
+  "inst/extdata/T1_rawdata.xlsx",
+  control_label = "Ct",
+  exclude = "free",
+  time_limit_hours = 24
+)
+
+plot_metric_superplot(
+  "inst/extdata/T1_rawdata.xlsx",
+  metrics = "SusI",
+  control_label = "Ct",
+  exclude = "free",
+  time_limit_hours = 24
+)
+```
+
+`plot_metric_superplot()` displays individual wells, biological-replicate means, and condition-level means together, making within- and between-replicate variability visible.
+
+The plotting functions adapt automatically to the condition labels. A numeric MOI series is displayed using the corresponding MOI ordering; other labeling schemes fall back to categorical plots.
+
+`plot_metric_superplot()` runs `run_susi()` internally at both the `individual_wells` and `biological_replicates` levels, so it may take longer than the other plotting functions.
+
+---
 
 ## Shiny application
 
-A point-and-click interface is provided at `inst/shiny_app/app.R`, covering the full workflow — upload, automatic condition/replicate detection, interactive parameter tuning with live diagnostic plots, results table, and Excel/PNG downloads.
+The repository contains a point-and-click Shiny application at:
 
-Requires three additional packages: `install.packages(c("shiny", "DT", "patchwork"))`.
+```text
+inst/shiny_app/app.R
+```
 
-**To launch:**
-- Open `inst/shiny_app/app.R` in RStudio and click the **Run App** button that appears in the editor pane; or
-- From the package root: `source("R/shiny_app.R"); run_app()`
+It covers the main workflow:
 
-**Workflow:** upload a `.xlsx` file → the control/exclude dropdowns populate automatically from the mapping sheet → adjust detection parameters in the sidebar if needed → **Run analysis** → review the *Overview*, *Combined view*, and *Metrics summary* tabs (plus *Condition detail* for anything that looks off) → download the results table and any figures.
+1. Upload an Excel file
+2. Review the detected conditions and controls
+3. Adjust detection parameters if necessary
+4. Run the analysis
+5. Inspect diagnostic and summary plots
+6. Download result tables and figures
 
-### Deployment
+The application also includes:
 
-Running the app locally requires R installed. For unrestricted browser access with no local install, deploy to [Posit Connect Cloud](https://connect.posit.cloud) — see `inst/shiny_app/deploy.R` for setup instructions (either via the `rsconnect` R package, or by publishing directly from a GitHub repository).
+- raw plate-reader import
+- visual plate-map editing
+- grouped analysis
+- interactive parameter tuning
+- Excel and PNG/SVG export
+
+### Run locally
+
+The Shiny application requires R.
+
+Install the additional packages:
+
+```r
+install.packages(c("shiny", "DT", "patchwork"))
+```
+
+Then either:
+
+- open `inst/shiny_app/app.R` in RStudio and click **Run App**, or
+- from the package root, run:
+
+```r
+source("R/shiny_app.R")
+run_app()
+```
+
+### Use the hosted application
+
+If you do not want to install R locally, use the hosted application:
+
+**[Launch susiR Web Application](https://01a0aedc-8749-7813-9276-04c501bdd47d.share.connect.posit.cloud/)**
+
+---
+
+## Deployment
+
+The Shiny application can also be deployed to Posit Connect Cloud.
+
+See:
+
+```text
+inst/shiny_app/deploy.R
+```
+
+for deployment instructions using either the `rsconnect` R package or publication from a GitHub repository.
+
+---
 
 ## Validation
 
 SusI and VI have been checked against the exact values reported in the companion manuscript for the T1/*E. coli* MG1655 dataset at MOI = 1:
 
 | Index | susiR | Manuscript |
-|---|---|---|
+|---|---:|---:|
 | SusI | 0.664 | 0.664 |
 | VI (local, MOI = 1) | 0.86 | 0.84 |
 | VI (global) | 0.84 | 0.84 |
 
-ti/tc and SupI were verified by re-deriving their calculation formulas directly from the original analysis scripts rather than against a single reported value; both are implemented to match exactly. The remaining five MOI conditions in the dataset have not been checked against exact reported numbers — the manuscript reports precise values only at MOI = 1, with the full dilution series shown graphically (Fig. 2) rather than tabulated — but a comparison against that figure shows close agreement across all four indices and all MOI conditions for the T1 series.
+The local VI difference reflects the current implementation and should not be interpreted as exact numerical identity with the manuscript's reported local value.
 
-### Implementation notes
+ti/tc and SupI were verified by re-deriving their calculation formulas directly from the original analysis scripts rather than against a single reported value; both are implemented to match those formulas.
 
-A few calculation details are worth stating explicitly for reproducibility:
+The remaining five MOI conditions in the dataset have not been checked against exact tabulated manuscript values. The manuscript reports precise values only at MOI = 1, with the full dilution series shown graphically rather than tabulated. A comparison against that figure showed close agreement across the T1 series.
 
-- **Control stationary-phase time (tc)** is computed once per dataset, from all control wells pooled together, and reused throughout: as the denominator bound for SusI, the integration bound for VI, and the fallback endpoint for ti. SusI's numerator (the t0→ti window) uses each biological replicate's own control curve; only the denominator uses the pooled curve.
-- **VI** is integrated from t = 0 to the same control-stationary-phase time (tc) used for SusI, following Storms et al. (2020), rather than over a fixed window to the end of the observation period.
-- **SupI's** integration window defaults to `time_limit_hours` rather than a fixed 30 hours, matching how the original pipeline was run for the companion manuscript.
-- **Reported variability** (`SusI_se`, `VI_local_se`, `SupI_se`, `ti_tc_se` in `run_susi()$summary`, and the error bars in `plot_metric_superplot()`) is the standard error across biological replicates (SD / √n), matching the convention used in the companion manuscript's figures.
-- The original analysis scripts use two separate (usually identically-valued) parameters to gate independent stationary-phase-like detection for SusI and VI; susiR unifies these into a single `tc`, detected once and reused for both. This is immaterial when both parameters share their default value (1.0 h, as used throughout the companion manuscript).
+---
 
-## Repository structure
+## Implementation notes
 
+A few calculation details are worth stating explicitly for reproducibility.
+
+### Control stationary-phase time (`tc`)
+
+`tc` is computed once per dataset, from all control wells pooled together, and reused throughout:
+
+- as the denominator bound for SusI
+- as the integration bound for VI
+- as the fallback endpoint for `ti`
+
+SusI's numerator (the `t0` → `ti` window) uses each biological replicate's own control curve; only the denominator uses the pooled control curve.
+
+### Virulence Index (VI)
+
+VI is integrated from `t = 0` to the same control stationary-phase time (`tc`) used for SusI, following Storms et al. (2020), rather than over a fixed window to the end of the observation period.
+
+### Suppression Index (SupI)
+
+The SupI integration window defaults to `time_limit_hours` rather than a fixed 30 hours, matching how the original pipeline was run for the companion manuscript.
+
+### Reported variability
+
+`SusI_se`, `VI_local_se`, `SupI_se`, and `ti_tc_se` in `run_susi()$summary`, together with the error bars in `plot_metric_superplot()`, represent the standard error across biological replicates:
+
+```text
+SE = SD / sqrt(n)
 ```
-susiR/
-├── DESCRIPTION
-├── R/
-│   ├── utils.R              # moving average, trapezoidal integration, well-ID parsing
-│   ├── data_input.R         # read_plate_data(), susi_resolve_bio_rep()
-│   ├── time_format.R        # Excel time/duration cell detection
-│   ├── conditions.R         # susi_resolve_conditions(), susi_check_moi_applicable()
-│   ├── detection.R          # susi_detect_t0/ti/tc(), susi_default_params()
-│   ├── metrics.R            # susi_calc_susi/vi_local/global_vi/supi/time_ratio()
-│   ├── run_susi.R           # run_susi() -- main entry point
-│   ├── diagnose.R           # diagnose_conditions() -- per-well detection QC
-│   ├── raw_import.R         # susi_import_raw() -- convert arbitrary plate-reader exports
-│   ├── plotting.R           # per-condition diagnostic plots
-│   ├── plotting_summary.R   # combined-curve and per-metric summary plots
-│   └── shiny_app.R          # run_app() launcher
-├── inst/
-│   ├── extdata/T1_rawdata.xlsx   # bundled example dataset
-│   └── shiny_app/                # Shiny application (app.R, deploy.R)
-└── README.md
-```
+
+This follows the convention used in the companion manuscript's figures.
+
+### Stationary-phase detection
+
+The original analysis scripts use two separate parameters to gate independent stationary-phase-like detection for SusI and VI. susiR unifies these into a single `tc`, detected once and reused for both.
+
+This is immaterial when both parameters share their default value of 1.0 h, as used throughout the companion manuscript.
+
+---
 
 ## Recent updates
 
-A few capabilities were added after the initial release:
+Several capabilities have been added after the initial release:
 
-- **Grouped analysis** (`host_col` in `run_susi()`, "Analyze in separate groups" in the app): When a single sheet contains multiple hosts/strains each with its own control, `susiR` resolves controls and computes metrics independently for each group. Controls are auto-detected (via common naming patterns or labels containing "host"), with a manual override option available in the app.
-- **Visual plate-map editor** (in the app): An interactive alternative to preparing a "name" sheet in Excel — click and drag across a 96-well grid to assign sample, group, and biological replicate labels directly in the browser.
-- **Raw-format import** (`susi_import_raw()`): Converts exports from various plate readers (handling different sheet names, header rows, well-ID formats, and time units) into standard `susiR` format. Validated against BioTek/Agilent Epoch2, Promega, and Thermo Fisher SkanIt exports, including non-contiguous well layouts and non-English headers.
-- **Export customization** (in the app): Image dimensions (width/height) and format (PNG/SVG) can be customized for all plot downloads, which is useful for multi-panel diagnostic figures or publication preparation.
+### Grouped analysis
 
-See `R/run_susi.R`, `R/raw_import.R`, and `inst/shiny_app/app.R` for implementation details.
+`host_col` in `run_susi()` and **Analyze in separate groups** in the Shiny application allow a single workbook to contain multiple hosts/strains, each with its own control.
+
+Controls can be auto-detected from common naming patterns or labels containing `"host"`, with a manual override available in the application.
+
+### Visual plate-map editor
+
+The Shiny application provides an interactive alternative to preparing the `name` sheet manually. Users can assign sample, group, and biological-replicate labels directly on a visual 96-well plate layout.
+
+### Raw-format import
+
+`susi_import_raw()` converts exports from different plate readers, including differences in:
+
+- sheet names
+- header rows
+- well-ID formats
+- time units
+- non-contiguous well layouts
+- English/Japanese headers
+
+### Export customization
+
+The Shiny application allows plot-download dimensions (width/height) and format (PNG/SVG) to be customized, which is useful for multi-panel diagnostic figures and publication preparation.
+
+For implementation details, see:
+
+- `R/run_susi.R`
+- `R/raw_import.R`
+- `inst/shiny_app/app.R`
+
+---
+
+## Repository structure
+
+```text
+susiR/
+├── DESCRIPTION
+├── R/
+│   ├── utils.R              # moving average, integration, well-ID parsing
+│   ├── data_input.R         # read_plate_data(), susi_resolve_bio_rep()
+│   ├── time_format.R        # Excel time/duration cell detection
+│   ├── conditions.R         # condition and MOI handling
+│   ├── detection.R          # t0/ti/tc detection and default parameters
+│   ├── metrics.R            # SusI, VI, SupI, and ti/tc calculations
+│   ├── run_susi.R           # run_susi() -- main entry point
+│   ├── diagnose.R           # diagnose_conditions() -- detection QC
+│   ├── raw_import.R         # susi_import_raw() -- raw-export conversion
+│   ├── plotting.R           # per-condition diagnostic plots
+│   ├── plotting_summary.R   # combined and summary plots
+│   └── shiny_app.R          # run_app() launcher
+├── inst/
+│   ├── extdata/
+│   │   └── T1_rawdata.xlsx  # bundled example dataset
+│   └── shiny_app/
+│       ├── app.R
+│       └── deploy.R
+└── README.md
+```
+
+---
 
 ## Citation
 
 If you use susiR, please cite:
 
-> Kaneko T, et al. susiR: standardized, automated quantification of phage lytic sustainability, virulence, and suppression from microplate growth-curve data. *Manuscript in preparation.*
+> Kaneko T, et al. *susiR: standardized, automated quantification of phage lytic sustainability, virulence, and suppression from microplate growth-curve data.* Manuscript in preparation.
+
+---
 
 ## License
 

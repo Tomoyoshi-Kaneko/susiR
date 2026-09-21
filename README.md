@@ -188,6 +188,17 @@ susiR/
 └── README.md
 ```
 
+## Recent updates
+
+A few capabilities were added after the initial release:
+
+- **Grouped analysis** (`host_col` in `run_susi()`, "Analyze in separate groups" in the app): When a single sheet contains multiple hosts/strains each with its own control, `susiR` resolves controls and computes metrics independently for each group. Controls are auto-detected (via common naming patterns or labels containing "host"), with a manual override option available in the app.
+- **Visual plate-map editor** (in the app): An interactive alternative to preparing a "name" sheet in Excel — click and drag across a 96-well grid to assign sample, group, and biological replicate labels directly in the browser.
+- **Raw-format import** (`susi_import_raw()`): Converts exports from various plate readers (handling different sheet names, header rows, well-ID formats, and time units) into standard `susiR` format. Validated against BioTek/Agilent Epoch2, Promega, and Thermo Fisher SkanIt exports, including non-contiguous well layouts and non-English headers.
+- **Export customization** (in the app): Image dimensions (width/height) and format (PNG/SVG) can be customized for all plot downloads, which is useful for multi-panel diagnostic figures or publication preparation.
+
+See `R/run_susi.R`, `R/raw_import.R`, and `inst/shiny_app/app.R` for implementation details.
+
 ## Citation
 
 If you use susiR, please cite:

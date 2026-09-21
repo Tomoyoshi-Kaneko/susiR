@@ -113,6 +113,7 @@ susi_excel_cell_formats <- function(file_path, sheet, col_letter = "A", n_check 
 #'   (`"xml_time_format"`, `"xml_plain_format"`, `"magnitude_fallback"`).
 #' @export
 susi_resolve_time_seconds <- function(time_raw, file_path = NULL, sheet = NULL, col_letter = "A") {
+  time_raw <- suppressWarnings(as.numeric(time_raw))
   codes <- character(0)
   if (!is.null(file_path) && !is.null(sheet) && requireNamespace("xml2", quietly = TRUE)) {
     codes <- susi_excel_cell_formats(file_path, sheet, col_letter)

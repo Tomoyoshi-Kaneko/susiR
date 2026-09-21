@@ -35,6 +35,14 @@ susi_resolve_conditions <- function(condition_labels, control_label = NULL,
 
   if (is.null(control_label)) {
     hit <- labels[tolower(trimws(labels)) %in% .default_control_patterns]
+    if (length(hit) == 0) {
+      # Fallback: a label containing "host" as a standalone word (e.g.
+      # "Host A5940", "E. lud host") is a common convention for a
+      # host-specific phage-free control, especially in multi-host
+      # datasets where an exact-match pattern can't work (the label
+      # necessarily also names the strain).
+      hit <- labels[grepl("\\bhost\\b", labels, ignore.case = TRUE)]
+    }
     if (length(hit) == 1) {
       control_label <- hit
       message("Control condition auto-detected as '", control_label, "'.")

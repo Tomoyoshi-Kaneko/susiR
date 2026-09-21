@@ -35,11 +35,13 @@
 plot_combined_curves <- function(file_path,
                                   od_sheet = "R", map_sheet = "name",
                                   well_col = "num", condition_col = "sample", bio_rep_col = "bio_rep",
+                                  host_col = NULL, host = NULL,
                                   tech_reps_per_bio_rep = 12,
                                   control_label = NULL, conditions = NULL, exclude = NULL,
                                   time_limit_hours = NULL, show_error_band = TRUE) {
   data <- read_plate_data(file_path, od_sheet, map_sheet, well_col, condition_col, bio_rep_col, tech_reps_per_bio_rep)
-  cond_info <- susi_resolve_conditions(data$mapping[[condition_col]], control_label, conditions, exclude)
+  data <- susi_filter_by_host(data, host_col, host, well_col)
+  cond_info <- susi_resolve_conditions(data$od_long$condition, control_label, conditions, exclude)
   control <- cond_info$control
   conds <- cond_info$conditions
 
@@ -146,12 +148,13 @@ susi_bio_rep_palette <- function(bio_reps) {
 plot_metric_superplot <- function(file_path, metrics = c("SusI", "VI_local", "SupI", "ti_tc"),
                                    od_sheet = "R", map_sheet = "name",
                                    well_col = "num", condition_col = "sample", bio_rep_col = "bio_rep",
+                                   host_col = NULL, host = NULL,
                                    tech_reps_per_bio_rep = 12,
                                    control_label = NULL, conditions = NULL, exclude = NULL,
                                    time_limit_hours = NULL, supi_window_hours = NULL,
                                    params = susi_default_params()) {
   common <- list(od_sheet = od_sheet, map_sheet = map_sheet, well_col = well_col, condition_col = condition_col,
-                  bio_rep_col = bio_rep_col, tech_reps_per_bio_rep = tech_reps_per_bio_rep,
+                  bio_rep_col = bio_rep_col, host_col = host_col, tech_reps_per_bio_rep = tech_reps_per_bio_rep,
                   control_label = control_label, conditions = conditions, exclude = exclude,
                   time_limit_hours = time_limit_hours, supi_window_hours = supi_window_hours, params = params,
                   verbose = FALSE)
@@ -159,16 +162,27 @@ plot_metric_superplot <- function(file_path, metrics = c("SusI", "VI_local", "Su
   wells_res <- do.call(run_susi, c(list(file_path = file_path, calculation_method = "individual_wells"), common))
   reps_res  <- do.call(run_susi, c(list(file_path = file_path, calculation_method = "biological_replicates"), common))
 
-  level_order <- wells_res$conditions
-  wells_df <- wells_res$summary
+  if (!is.null(host_col)) {
+    if (is.null(host)) stop("`host_col` was given but `host` was not. Available hosts: ",
+                             paste(names(wells_res$conditions), collapse = ", "), call. = FALSE)
+    level_order <- wells_res$conditions[[host]]
+    wells_summary <- wells_res$summary[wells_res$summary$host == host, ]
+    reps_summary  <- reps_res$summary[reps_res$summary$host == host, ]
+  } else {
+    level_order <- wells_res$conditions
+    wells_summary <- wells_res$summary
+    reps_summary <- reps_res$summary
+  }
+
+  wells_df <- wells_summary
   wells_df$condition <- factor(wells_df$condition, levels = level_order)
   wells_df$bio_rep <- factor(wells_df$bio_rep)
 
-  reps_df <- reps_res$summary[!is.na(reps_res$summary$bio_rep), ]
+  reps_df <- reps_summary[!is.na(reps_summary$bio_rep), ]
   reps_df$condition <- factor(reps_df$condition, levels = level_order)
   reps_df$bio_rep <- factor(reps_df$bio_rep)
 
-  cond_df <- reps_res$summary[is.na(reps_res$summary$bio_rep), ]
+  cond_df <- reps_summary[is.na(reps_summary$bio_rep), ]
   cond_df$condition <- factor(cond_df$condition, levels = level_order)
 
   pal <- susi_bio_rep_palette(levels(wells_df$bio_rep))

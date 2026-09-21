@@ -80,6 +80,7 @@ susi_plot_curve <- function(time_h, control_od, treated_od, t0 = NA, ti = NA, tc
 plot_condition <- function(file_path, condition,
                             od_sheet = "R", map_sheet = "name",
                             well_col = "num", condition_col = "sample", bio_rep_col = "bio_rep",
+                            host_col = NULL, host = NULL,
                             tech_reps_per_bio_rep = 12,
                             control_label = NULL, bio_rep = NULL,
                             calculation_method = c("biological_replicates", "overall_mean"),
@@ -89,7 +90,8 @@ plot_condition <- function(file_path, condition,
   if (!is.null(time_limit_hours)) params$time_limit_hours <- time_limit_hours
 
   data <- read_plate_data(file_path, od_sheet, map_sheet, well_col, condition_col, bio_rep_col, tech_reps_per_bio_rep)
-  cond_info <- susi_resolve_conditions(data$mapping[[condition_col]], control_label)
+  data <- susi_filter_by_host(data, host_col, host, well_col)
+  cond_info <- susi_resolve_conditions(data$od_long$condition, control_label)
   control <- cond_info$control
   if (!condition %in% cond_info$conditions) {
     stop("'", condition, "' is not among the resolved conditions: ", paste(cond_info$conditions, collapse = ", "), call. = FALSE)
@@ -146,42 +148,78 @@ plot_condition <- function(file_path, condition,
 #' @inheritParams run_susi
 #' @param output_file Optional path (`.pdf` or `.png`) to save the grid to.
 #' @param ncol Number of panel columns. Default: `min(3, n_conditions)`.
+#' @param host When `host_col` is given, restricts the grid to that one
+#'   host's conditions. If `host_col` is given but `host` is left `NULL`,
+#'   every host's conditions are shown together in one grid (each panel
+#'   titled `"<host>: <condition>"`), which is the more useful default for
+#'   a first look at a multi-host dataset.
 #' @return A combined `patchwork` object (also saved to `output_file` if given).
 #' @export
 plot_all_conditions <- function(file_path,
                                  od_sheet = "R", map_sheet = "name",
                                  well_col = "num", condition_col = "sample", bio_rep_col = "bio_rep",
+                                 host_col = NULL, host = NULL,
                                  tech_reps_per_bio_rep = 12,
                                  control_label = NULL, conditions = NULL, exclude = NULL,
                                  time_limit_hours = NULL,
                                  params = susi_default_params(),
                                  output_file = NULL, ncol = NULL) {
   if (!is.null(time_limit_hours)) params$time_limit_hours <- time_limit_hours
-  data <- read_plate_data(file_path, od_sheet, map_sheet, well_col, condition_col, bio_rep_col, tech_reps_per_bio_rep)
-  cond_info <- susi_resolve_conditions(data$mapping[[condition_col]], control_label, conditions, exclude)
-  control <- cond_info$control
-  conds <- cond_info$conditions
+  data_raw <- read_plate_data(file_path, od_sheet, map_sheet, well_col, condition_col, bio_rep_col, tech_reps_per_bio_rep)
 
-  od_long <- data$od_long
-  time_h <- data$time_h
-  wide_curve <- function(df) stats::aggregate(od ~ time_h, data = df, FUN = mean, na.rm = TRUE)
-  ctrl <- wide_curve(od_long[od_long$condition == control, ])
-  tc_res <- susi_detect_tc(ctrl$time_h, ctrl$od, params)
-  c_al <- ctrl$od[match(time_h, ctrl$time_h)]
+  build_panels_for <- function(data, title_prefix = "") {
+    cond_info <- susi_resolve_conditions(data$od_long$condition, control_label, conditions, exclude)
+    control <- cond_info$control
+    conds <- cond_info$conditions
+    od_long <- data$od_long
+    time_h <- data$time_h
+    wide_curve <- function(df) stats::aggregate(od ~ time_h, data = df, FUN = mean, na.rm = TRUE)
+    ctrl <- wide_curve(od_long[od_long$condition == control, ])
+    tc_res <- susi_detect_tc(ctrl$time_h, ctrl$od, params)
+    c_al <- ctrl$od[match(time_h, ctrl$time_h)]
+    lapply(conds, function(cond) {
+      trt <- wide_curve(od_long[od_long$condition == cond, ])
+      t0_res <- susi_detect_t0(trt$time_h, trt$od, params)
+      ti_res <- if (is.na(t0_res$t0)) list(ti = NA_real_) else susi_detect_ti(trt$time_h, trt$od, t0_res$t0, params)
+      p_al <- trt$od[match(time_h, trt$time_h)]
+      susi_val <- susi_calc_susi(time_h, c_al, p_al, t0_res$t0, ti_res$ti, tc_res$tc)
+      susi_plot_curve(time_h, c_al, p_al, t0_res$t0, ti_res$ti, tc_res$tc,
+                       title = paste0(title_prefix, cond), subtitle = sprintf("SusI = %.3f", susi_val))
+    })
+  }
 
-  panels <- lapply(conds, function(cond) {
-    trt <- wide_curve(od_long[od_long$condition == cond, ])
-    t0_res <- susi_detect_t0(trt$time_h, trt$od, params)
-    ti_res <- if (is.na(t0_res$t0)) list(ti = NA_real_) else susi_detect_ti(trt$time_h, trt$od, t0_res$t0, params)
-    p_al <- trt$od[match(time_h, trt$time_h)]
-    susi_val <- susi_calc_susi(time_h, c_al, p_al, t0_res$t0, ti_res$ti, tc_res$tc)
-    susi_plot_curve(time_h, c_al, p_al, t0_res$t0, ti_res$ti, tc_res$tc,
-                     title = cond, subtitle = sprintf("SusI = %.3f", susi_val))
-  })
+  if (!is.null(host_col) && is.null(host)) {
+    ## "All hosts" mode: one grid, every host's conditions included,
+    ## panels labelled "<host>: <condition>". This is the default when a
+    ## host column is given but no single host is picked.
+    if (!host_col %in% names(data_raw$mapping)) {
+      stop("`host_col` = '", host_col, "' does not match any column in the mapping sheet.", call. = FALSE)
+    }
+    host_map <- stats::setNames(data_raw$mapping[[host_col]], data_raw$mapping[[well_col]])
+    od_all <- data_raw$od_long
+    od_all$host <- host_map[od_all$well]
+    hosts <- unique(od_all$host)
+    hosts <- hosts[!is.na(hosts) & nzchar(trimws(as.character(hosts)))]
+
+    panels <- list()
+    for (h in hosts) {
+      dsub <- data_raw
+      dsub$od_long <- od_all[!is.na(od_all$host) & od_all$host == h, ]
+      dsub$time_h <- sort(unique(dsub$od_long$time_h))
+      p <- tryCatch(build_panels_for(dsub, title_prefix = paste0(h, ": ")),
+                    error = function(e) { warning("Host '", h, "' skipped: ", conditionMessage(e), call. = FALSE); list() })
+      panels <- c(panels, p)
+    }
+    title_suffix <- paste0(length(hosts), " hosts")
+  } else {
+    data <- susi_filter_by_host(data_raw, host_col, host, well_col)
+    panels <- build_panels_for(data)
+    title_suffix <- if (!is.null(host)) paste0("host = '", host, "'") else NULL
+  }
 
   if (is.null(ncol)) ncol <- min(3, length(panels))
   combined <- patchwork::wrap_plots(panels, ncol = ncol) +
-    patchwork::plot_annotation(title = paste0("susiR diagnostic overview  |  control = '", control, "'"))
+    patchwork::plot_annotation(title = paste0("susiR diagnostic overview", if (!is.null(title_suffix)) paste0("  |  ", title_suffix) else ""))
 
   if (!is.null(output_file)) {
     nr <- ceiling(length(panels) / ncol)

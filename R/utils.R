@@ -107,3 +107,33 @@ susi_parse_moi_numeric <- function(labels) {
   names(out) <- labels
   out
 }
+
+#' Restrict a loaded dataset to one host (internal helper for plotting fns)
+#'
+#' @param data The list returned by [read_plate_data()].
+#' @param host_col Name of the host column in the mapping sheet, or `NULL`
+#'   to skip filtering entirely (returns `data` unchanged).
+#' @param host The specific host value to keep.
+#' @param well_col Well-ID column name (to build the well -> host lookup).
+#' @return `data`, with `od_long` (and `time_h`) restricted to that host's
+#'   wells if `host_col` was given; unchanged otherwise.
+#' @keywords internal
+susi_filter_by_host <- function(data, host_col, host, well_col) {
+  if (is.null(host_col)) return(data)
+  if (!host_col %in% names(data$mapping)) {
+    stop("`host_col` = '", host_col, "' does not match any column in the mapping sheet (",
+         paste(names(data$mapping), collapse = ", "), ").", call. = FALSE)
+  }
+  host_map <- stats::setNames(data$mapping[[host_col]], data$mapping[[well_col]])
+  data$od_long$host <- host_map[data$od_long$well]
+  available <- unique(data$od_long$host[!is.na(data$od_long$host)])
+  if (is.null(host)) {
+    stop("`host_col` was given but `host` was not. Available hosts: ", paste(available, collapse = ", "), call. = FALSE)
+  }
+  if (!host %in% available) {
+    stop("`host` = '", host, "' not found. Available hosts: ", paste(available, collapse = ", "), call. = FALSE)
+  }
+  data$od_long <- data$od_long[!is.na(data$od_long$host) & data$od_long$host == host, ]
+  data$time_h <- sort(unique(data$od_long$time_h))
+  data
+}

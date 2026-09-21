@@ -95,7 +95,43 @@ read_plate_data <- function(file_path,
                                    bio_rep_col = bio_rep_col,
                                    tech_reps_per_bio_rep = tech_reps_per_bio_rep)
 
-  time_raw <- od_wide[["Time"]]
+  time_raw <- suppressWarnings(as.numeric(od_wide[["Time"]]))
+  ## Some real-world exports append trailing summary rows below the actual
+  ## kinetic data (e.g. software-computed "Max V", "R-Squared", "Lagtime"
+  ## statistics, sometimes with plate-row letters as row labels). Any row
+  ## whose Time value isn't a number can't be a real time point, so such
+  ## rows are dropped here rather than treated as a parse failure -- this
+  ## also naturally discards fully blank trailing rows.
+  junk_rows <- is.na(time_raw)
+  if (any(junk_rows)) {
+    message(sum(junk_rows), " row(s) with a non-numeric Time value were dropped ",
+            "(commonly trailing summary rows some plate-reader software appends below the data): ",
+            paste(utils::head(as.character(od_wide[["Time"]][junk_rows]), 5), collapse = ", "),
+            if (sum(junk_rows) > 5) ", ..." else "")
+    od_wide <- od_wide[!junk_rows, , drop = FALSE]
+    time_raw <- time_raw[!junk_rows]
+  }
+
+  ## Well columns occasionally contain a non-numeric marker for an invalid
+  ## read (e.g. sensor saturation/overflow, often shown as "?????" or
+  ## similar) instead of a number. These become NA (a missing OD reading
+  ## for that well/time point) rather than corrupting the column's type or
+  ## aborting the whole import.
+  well_cols_all <- setdiff(names(od_wide), "Time")
+  na_introduced <- 0L
+  for (wc in well_cols_all) {
+    orig <- od_wide[[wc]]
+    if (!is.numeric(orig)) {
+      converted <- suppressWarnings(as.numeric(orig))
+      na_introduced <- na_introduced + sum(is.na(converted) & !is.na(orig) & trimws(as.character(orig)) != "")
+      od_wide[[wc]] <- converted
+    }
+  }
+  if (na_introduced > 0) {
+    message(na_introduced, " well reading(s) were non-numeric (e.g. an instrument error/overflow marker) ",
+            "and were treated as missing (NA) rather than aborting.")
+  }
+
   if (time_unit == "auto") {
     time_res <- susi_resolve_time_seconds(time_raw, file_path = file_path, sheet = od_sheet, col_letter = "A")
     time_sec <- time_res$time_sec
@@ -105,6 +141,7 @@ read_plate_data <- function(file_path,
     time_sec <- if (time_unit == "seconds") time_raw else time_raw * 3600
   }
   time_h <- time_sec / 3600
+  od_wide[["Time"]] <- time_raw  # normalize to numeric so pivoting/lookup stay consistent
   # Lookup from each raw Time value to its resolved seconds, reused below so
   # the (potentially expensive) XML introspection only runs once per file.
   time_lookup <- stats::setNames(time_sec, as.character(time_raw))

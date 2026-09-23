@@ -65,7 +65,7 @@ run_susi <- function(file_path,
                       well_col = "num", condition_col = "sample", bio_rep_col = "bio_rep",
                       host_col = NULL,
                       tech_reps_per_bio_rep = 12,
-                      control_label = NULL, conditions = NULL, exclude = NULL,
+                      control_label = NULL, conditions = NULL, exclude = NULL, condition_order = NULL,
                       calculation_method = c("biological_replicates", "individual_wells", "overall_mean"),
                       time_limit_hours = NULL,
                       supi_window_hours = NULL,
@@ -86,7 +86,7 @@ run_susi <- function(file_path,
 
   if (!use_host) {
     core <- .run_susi_core(data$od_long, data$time_h, condition_col,
-                            control_label, conditions, exclude,
+                            control_label, conditions, exclude, condition_order,
                             calculation_method, supi_window_hours, params, verbose)
     return(list(summary = core$summary, global_vi = core$global_vi, diagnostics = core$diagnostics,
                 control = core$control, conditions = core$conditions,
@@ -135,7 +135,7 @@ run_susi <- function(file_path,
     od_h <- od_long_all[!is.na(od_long_all$host) & od_long_all$host == h, ]
     core <- tryCatch(
       .run_susi_core(od_h, sort(unique(od_h$time_h)), condition_col,
-                      control_per_host[[h]], conditions, exclude,
+                      control_per_host[[h]], conditions, exclude, condition_order,
                       calculation_method, supi_window_hours, params, verbose),
       error = function(e) {
         warning("Host '", h, "' failed and was skipped: ", conditionMessage(e), call. = FALSE)
@@ -162,9 +162,9 @@ run_susi <- function(file_path,
 
 #' @keywords internal
 .run_susi_core <- function(od_long, time_h, condition_col,
-                            control_label, conditions, exclude,
+                            control_label, conditions, exclude, condition_order,
                             calculation_method, supi_window_hours, params, verbose) {
-  cond_info <- susi_resolve_conditions(od_long$condition, control_label, conditions, exclude)
+  cond_info <- susi_resolve_conditions(od_long$condition, control_label, conditions, exclude, condition_order)
   control <- cond_info$control
   conds <- cond_info$conditions
   if (verbose) message("Conditions to analyze (", length(conds), "): ", paste(conds, collapse = ", "))

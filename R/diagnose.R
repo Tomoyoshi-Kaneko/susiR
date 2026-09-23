@@ -25,7 +25,7 @@ diagnose_conditions <- function(file_path,
                                  well_col = "num", condition_col = "sample", bio_rep_col = "bio_rep",
                                  host_col = NULL,
                                  tech_reps_per_bio_rep = 12,
-                                 control_label = NULL, conditions = NULL, exclude = NULL,
+                                 control_label = NULL, conditions = NULL, exclude = NULL, condition_order = NULL,
                                  params = susi_default_params(),
                                  output_excel = NULL,
                                  verbose = TRUE) {
@@ -42,7 +42,7 @@ diagnose_conditions <- function(file_path,
     all_conds <- unique(od_long$condition)
     if (!is.null(exclude)) all_conds <- setdiff(all_conds, exclude)
   } else {
-    cond_info <- susi_resolve_conditions(od_long$condition, control_label, conditions, exclude)
+    cond_info <- susi_resolve_conditions(od_long$condition, control_label, conditions, exclude, condition_order)
     all_conds <- c(cond_info$control, cond_info$conditions)
   }
 

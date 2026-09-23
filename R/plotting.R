@@ -160,7 +160,7 @@ plot_all_conditions <- function(file_path,
                                  well_col = "num", condition_col = "sample", bio_rep_col = "bio_rep",
                                  host_col = NULL, host = NULL,
                                  tech_reps_per_bio_rep = 12,
-                                 control_label = NULL, conditions = NULL, exclude = NULL,
+                                 control_label = NULL, conditions = NULL, exclude = NULL, condition_order = NULL,
                                  time_limit_hours = NULL,
                                  params = susi_default_params(),
                                  output_file = NULL, ncol = NULL) {
@@ -168,7 +168,7 @@ plot_all_conditions <- function(file_path,
   data_raw <- read_plate_data(file_path, od_sheet, map_sheet, well_col, condition_col, bio_rep_col, tech_reps_per_bio_rep)
 
   build_panels_for <- function(data, title_prefix = "") {
-    cond_info <- susi_resolve_conditions(data$od_long$condition, control_label, conditions, exclude)
+    cond_info <- susi_resolve_conditions(data$od_long$condition, control_label, conditions, exclude, condition_order)
     control <- cond_info$control
     conds <- cond_info$conditions
     od_long <- data$od_long

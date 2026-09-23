@@ -30,6 +30,11 @@
 #' @inheritParams run_susi
 #' @param show_error_band If `TRUE` (default), shades +/- 1 SD across
 #'   biological replicates around each mean curve.
+#' @param condition_colors Optional named character vector mapping condition
+#'   label -> colour, for the categorical (non-MOI) case. Unmatched
+#'   conditions fall back to `ggplot2`'s default palette. Ignored when the
+#'   conditions form an MOI series (a continuous viridis gradient is used
+#'   there by design).
 #' @return A `ggplot` object.
 #' @export
 plot_combined_curves <- function(file_path,
@@ -37,11 +42,11 @@ plot_combined_curves <- function(file_path,
                                   well_col = "num", condition_col = "sample", bio_rep_col = "bio_rep",
                                   host_col = NULL, host = NULL,
                                   tech_reps_per_bio_rep = 12,
-                                  control_label = NULL, conditions = NULL, exclude = NULL,
-                                  time_limit_hours = NULL, show_error_band = TRUE) {
+                                  control_label = NULL, conditions = NULL, exclude = NULL, condition_order = NULL,
+                                  time_limit_hours = NULL, show_error_band = TRUE, condition_colors = NULL) {
   data <- read_plate_data(file_path, od_sheet, map_sheet, well_col, condition_col, bio_rep_col, tech_reps_per_bio_rep)
   data <- susi_filter_by_host(data, host_col, host, well_col)
-  cond_info <- susi_resolve_conditions(data$od_long$condition, control_label, conditions, exclude)
+  cond_info <- susi_resolve_conditions(data$od_long$condition, control_label, conditions, exclude, condition_order)
   control <- cond_info$control
   conds <- cond_info$conditions
 
@@ -86,10 +91,12 @@ plot_combined_curves <- function(file_path,
         data = trt, ggplot2::aes(.data$time_h, ymin = .data$mean_od - .data$sd_od, ymax = .data$mean_od + .data$sd_od,
                                   fill = .data$condition, group = .data$condition), alpha = 0.25, color = NA) +
         ggplot2::guides(fill = "none")
+      if (!is.null(condition_colors)) p <- p + ggplot2::scale_fill_manual(values = condition_colors)
     }
     p <- p +
       ggplot2::geom_line(data = trt, ggplot2::aes(.data$time_h, .data$mean_od, color = .data$condition), linewidth = 0.8) +
       ggplot2::labs(color = "Condition")
+    if (!is.null(condition_colors)) p <- p + ggplot2::scale_color_manual(values = condition_colors)
   }
 
   ctrl <- df[df$is_control, ]
@@ -150,12 +157,12 @@ plot_metric_superplot <- function(file_path, metrics = c("SusI", "VI_local", "Su
                                    well_col = "num", condition_col = "sample", bio_rep_col = "bio_rep",
                                    host_col = NULL, host = NULL,
                                    tech_reps_per_bio_rep = 12,
-                                   control_label = NULL, conditions = NULL, exclude = NULL,
+                                   control_label = NULL, conditions = NULL, exclude = NULL, condition_order = NULL,
                                    time_limit_hours = NULL, supi_window_hours = NULL,
                                    params = susi_default_params()) {
   common <- list(od_sheet = od_sheet, map_sheet = map_sheet, well_col = well_col, condition_col = condition_col,
                   bio_rep_col = bio_rep_col, host_col = host_col, tech_reps_per_bio_rep = tech_reps_per_bio_rep,
-                  control_label = control_label, conditions = conditions, exclude = exclude,
+                  control_label = control_label, conditions = conditions, exclude = exclude, condition_order = condition_order,
                   time_limit_hours = time_limit_hours, supi_window_hours = supi_window_hours, params = params,
                   verbose = FALSE)
 
@@ -233,9 +240,15 @@ plot_metric_superplot <- function(file_path, metrics = c("SusI", "VI_local", "Su
 #'
 #' @param result The list returned by [run_susi()].
 #' @param metrics Which metrics to plot. Default all four.
+#' @param condition_colors Optional named character vector mapping condition
+#'   label -> colour (any value `ggplot2` understands, e.g. `"#c0392b"` or
+#'   `"steelblue"`), for the categorical (non-MOI) bar-chart case. Unnamed
+#'   / unmatched conditions fall back to the default colour. Ignored when
+#'   the conditions form an MOI dose-response series (a single line/point
+#'   colour is used there, matching the plot's continuous-fit style).
 #' @return A `ggplot` object (single metric) or `patchwork` object (multiple).
 #' @export
-plot_metrics_summary <- function(result, metrics = c("SusI", "VI_local", "SupI", "ti_tc")) {
+plot_metrics_summary <- function(result, metrics = c("SusI", "VI_local", "SupI", "ti_tc"), condition_colors = NULL) {
   summ <- result$summary
   cond_level <- if ("well" %in% names(summ)) {
     dplyr::summarise(dplyr::group_by(summ, .data$condition),
@@ -269,9 +282,15 @@ plot_metrics_summary <- function(result, metrics = c("SusI", "VI_local", "SupI",
         ggplot2::geom_point(size = 2.2, color = "#c0392b") +
         ggplot2::labs(x = "log10(MOI)")
     } else {
-      p <- ggplot2::ggplot(d, ggplot2::aes(x = .data$condition, y = .data$value)) +
-        ggplot2::geom_col(fill = "#c0392b", width = 0.6, alpha = 0.85) +
-        ggplot2::labs(x = NULL) +
+      p <- ggplot2::ggplot(d, ggplot2::aes(x = .data$condition, y = .data$value))
+      if (is.null(condition_colors)) {
+        p <- p + ggplot2::geom_col(fill = "#c0392b", width = 0.6, alpha = 0.85)
+      } else {
+        p <- p + ggplot2::geom_col(ggplot2::aes(fill = .data$condition), width = 0.6, alpha = 0.9) +
+          ggplot2::scale_fill_manual(values = condition_colors, na.value = "#c0392b") +
+          ggplot2::guides(fill = "none")
+      }
+      p <- p + ggplot2::labs(x = NULL) +
         ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 30, hjust = 1))
     }
     if (has_se) {

@@ -21,16 +21,25 @@
 #' @param control_label Optional explicit control label. If given, it must
 #'   be one of `condition_labels`.
 #' @param conditions Optional explicit vector of condition labels to
-#'   analyze (also fixes their order, e.g. for plotting). Defaults to every
-#'   non-control label, in order of first appearance.
+#'   analyze (also fixes their order, e.g. for plotting) -- anything not
+#'   listed here is excluded entirely, not just reordered. Defaults to
+#'   every non-control label, in order of first appearance.
 #' @param exclude Optional vector of labels to drop entirely (e.g. a
 #'   `"free"` / phage-only-no-bacteria well type that is neither the control
 #'   nor a condition of interest).
+#' @param condition_order Optional display-order override, without
+#'   restricting which conditions are analyzed (unlike `conditions` above).
+#'   Any resolved condition named here is moved to match this order; any
+#'   resolved condition *not* named here keeps its default order and is
+#'   placed after all the ones that are. A label here that isn't an actual
+#'   resolved condition is ignored (e.g. harmless if it's the control, or a
+#'   typo -- use this purely to reorder, not to validate).
 #' @return A list with `control` (character scalar) and `conditions`
 #'   (character vector, analysis order).
 #' @export
 susi_resolve_conditions <- function(condition_labels, control_label = NULL,
-                                     conditions = NULL, exclude = NULL) {
+                                     conditions = NULL, exclude = NULL,
+                                     condition_order = NULL) {
   labels <- unique(condition_labels)
 
   if (is.null(control_label)) {
@@ -69,6 +78,12 @@ susi_resolve_conditions <- function(condition_labels, control_label = NULL,
     if (length(unknown) > 0) {
       stop("`conditions` includes label(s) not present in the data: ", paste(unknown, collapse = ", "), call. = FALSE)
     }
+  }
+
+  if (!is.null(condition_order)) {
+    ordered_part <- intersect(condition_order, conditions)   # keep only real, resolved conditions, in the requested order
+    rest <- setdiff(conditions, ordered_part)                 # anything not mentioned keeps its existing relative order
+    conditions <- c(ordered_part, rest)
   }
 
   list(control = control_label, conditions = conditions)

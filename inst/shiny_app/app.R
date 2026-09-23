@@ -96,6 +96,11 @@ ui <- fluidPage(
       hr(),
       conditionalPanel("!input.use_host", uiOutput("control_ui")),
       uiOutput("exclude_ui"),
+      textInput("condition_order_input", "Display order (optional, comma-separated)",
+                value = "", placeholder = "e.g. 10^0, 10^-1, 10^-2"),
+      textInput("condition_colors_input", "Custom colors (optional, label=color, comma-separated)",
+                value = "", placeholder = "e.g. 10^0=#1b9e77, 10^-1=steelblue"),
+      helpText("Anything not named in \"Display order\" keeps its usual order, placed after the ones you did name. Anything not named in \"Custom colors\" keeps the default palette."),
       selectInput("calculation_method", "Aggregation level",
                   choices = c("biological_replicates", "individual_wells", "overall_mean"),
                   selected = "biological_replicates"),
@@ -151,7 +156,11 @@ ui <- fluidPage(
                  br(),
                  helpText("SusI / VI / SupI / ti-tc across conditions: individual wells (circles), biological-replicate means (triangles), and the condition mean \u00b1 SD (black diamond and error bar), colour-coded by replicate."),
                  plotOutput("superplot", height = "650px"),
-                 downloadButton("dl_superplot", "Download this view")),
+                 downloadButton("dl_superplot", "Download this view"),
+                 hr(),
+                 helpText("Simple bar-chart view of the same numbers (respects \"Display order\" and \"Custom colors\" from the sidebar):"),
+                 plotOutput("bar_chart", height = "400px"),
+                 downloadButton("dl_bar_chart", "Download this view")),
         tabPanel("Condition detail",
                  br(),
                  uiOutput("detail_condition_ui"),
@@ -460,6 +469,23 @@ server <- function(input, output, session) {
     selectInput("exclude_labels", "Exclude condition(s) (optional)", choices = labs, selected = NULL, multiple = TRUE)
   })
 
+  condition_order_parsed <- reactive({
+    txt <- trimws(input$condition_order_input %||% "")
+    if (!nzchar(txt)) return(NULL)
+    parts <- trimws(strsplit(txt, ",")[[1]])
+    parts[nzchar(parts)]
+  })
+
+  condition_colors_parsed <- reactive({
+    txt <- trimws(input$condition_colors_input %||% "")
+    if (!nzchar(txt)) return(NULL)
+    pairs <- strsplit(txt, ",")[[1]]
+    kv <- lapply(pairs, function(p) trimws(strsplit(p, "=")[[1]]))
+    kv <- kv[vapply(kv, length, integer(1)) == 2]
+    if (length(kv) == 0) return(NULL)
+    stats::setNames(vapply(kv, `[`, character(1), 2), vapply(kv, `[`, character(1), 1))
+  })
+
   ## --- Main analysis, triggered only by the Run button -------------------
   result <- eventReactive(input$run, {
     withProgress(message = "Running susiR...", value = 0.3, {
@@ -470,7 +496,7 @@ server <- function(input, output, session) {
                host_col = host_col_effective(),
                tech_reps_per_bio_rep = input$tech_reps %||% 12,
                control_label = if (isTRUE(input$use_host)) group_control_overrides() else input$control_label,
-               exclude = input$exclude_labels,
+               exclude = input$exclude_labels, condition_order = condition_order_parsed(),
                calculation_method = input$calculation_method,
                supi_window_hours = input$supi_window_hours,
                params = current_params(), verbose = FALSE)
@@ -486,7 +512,7 @@ server <- function(input, output, session) {
                            host_col = host_col_effective(),
                            tech_reps_per_bio_rep = input$tech_reps %||% 12,
                            control_label = if (isTRUE(input$use_host)) group_control_overrides() else input$control_label,
-                           exclude = input$exclude_labels,
+                           exclude = input$exclude_labels, condition_order = condition_order_parsed(),
                            params = current_params())
     })
   })
@@ -499,7 +525,7 @@ server <- function(input, output, session) {
                          host_col = host_col_effective(),
                          tech_reps_per_bio_rep = input$tech_reps %||% 12,
                          control_label = if (isTRUE(input$use_host)) group_control_overrides() else input$control_label,
-                         exclude = input$exclude_labels,
+                         exclude = input$exclude_labels, condition_order = condition_order_parsed(),
                          params = current_params(), verbose = FALSE)
   })
 
@@ -513,9 +539,10 @@ server <- function(input, output, session) {
                           host_col = host_col_effective(), host = if (isTRUE(input$use_host)) input$selected_host else NULL,
                           tech_reps_per_bio_rep = input$tech_reps %||% 12,
                           control_label = if (isTRUE(input$use_host)) group_control_overrides() else input$control_label,
-                          exclude = input$exclude_labels,
+                          exclude = input$exclude_labels, condition_order = condition_order_parsed(),
                           time_limit_hours = current_params()$time_limit_hours,
-                          show_error_band = isTRUE(input$combined_error_band))
+                          show_error_band = isTRUE(input$combined_error_band),
+                          condition_colors = condition_colors_parsed())
   })
   output$combined_plot <- renderPlot({ req(combined()); combined() })
 
@@ -527,12 +554,25 @@ server <- function(input, output, session) {
                            host_col = host_col_effective(), host = if (isTRUE(input$use_host)) input$selected_host else NULL,
                            tech_reps_per_bio_rep = input$tech_reps %||% 12,
                            control_label = if (isTRUE(input$use_host)) group_control_overrides() else input$control_label,
-                           exclude = input$exclude_labels,
+                           exclude = input$exclude_labels, condition_order = condition_order_parsed(),
                            time_limit_hours = current_params()$time_limit_hours,
                            supi_window_hours = input$supi_window_hours,
                            params = current_params())
   })
   output$superplot <- renderPlot({ req(superplot_obj()); superplot_obj() })
+
+  bar_chart_obj <- eventReactive(input$run, {
+    if (isTRUE(input$use_host)) {
+      req(input$selected_host)
+      r <- result()
+      sub_summary <- r$summary[r$summary$host == input$selected_host, ]
+      sub_result <- list(summary = sub_summary, conditions = r$conditions[[input$selected_host]])
+      plot_metrics_summary(sub_result, condition_colors = condition_colors_parsed())
+    } else {
+      plot_metrics_summary(result(), condition_colors = condition_colors_parsed())
+    }
+  })
+  output$bar_chart <- renderPlot({ req(bar_chart_obj()); bar_chart_obj() })
 
   output$detail_condition_ui <- renderUI({
     req(result())
@@ -624,6 +664,10 @@ server <- function(input, output, session) {
   output$dl_superplot <- downloadHandler(
     filename = function() paste0("susiR_metrics_summary.", .export_ext()),
     content = function(file) .save_export(file, superplot_obj())
+  )
+  output$dl_bar_chart <- downloadHandler(
+    filename = function() paste0("susiR_bar_chart.", .export_ext()),
+    content = function(file) .save_export(file, bar_chart_obj())
   )
   output$dl_detail <- downloadHandler(
     filename = function() paste0("susiR_", input$detail_condition, ".", .export_ext()),

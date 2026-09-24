@@ -2,10 +2,11 @@
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/Tomoyoshi-Kaneko/susiR/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/Tomoyoshi-Kaneko/susiR/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 <!-- badges: end -->
 
-**susiR** is an R package and interactive Shiny application for automating the quantification of phage lytic dynamics...
+## Standardized, automated, and code-free quantification of phage lytic dynamics from microplate growth-curve data
+
+**susiR** is an open-source R package and interactive Shiny application that automates the quantification of bacteriophage lytic dynamics without writing any R code.
 
 # susiR
 

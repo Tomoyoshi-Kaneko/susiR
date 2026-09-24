@@ -31,7 +31,9 @@
 #' @param show_error_band If `TRUE` (default), shades +/- 1 SD across
 #'   biological replicates around each mean curve.
 #' @param condition_colors Optional named character vector mapping condition
-#'   label -> colour, for the categorical (non-MOI) case. Unmatched
+#'   label -> colour (a common name like `"red"` or `"steelblue"` works
+#'   directly; a hex code like `"#1b9e77"` works too, for anything more
+#'   specific), for the categorical (non-MOI) case. Unmatched
 #'   conditions fall back to `ggplot2`'s default palette. Ignored when the
 #'   conditions form an MOI series (a continuous viridis gradient is used
 #'   there by design).

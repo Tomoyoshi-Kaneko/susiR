@@ -1,23 +1,15 @@
-# susiR <img src="man/figures/logo.png" align="right" height="139" />
+# susiR <img src="man/figures/logo.png" align="right" height="150" />
 
-<!-- badges: start -->
-[![R-CMD-check](https://github.com/Tomoyoshi-Kaneko/susiR/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/Tomoyoshi-Kaneko/susiR/actions)
-<!-- badges: end -->
+**susiR** is an open-source R package and interactive Shiny application for standardizing, automating, and code-free quantification of bacteriophage lytic dynamics from microplate growth-curve data.
 
-## Standardized, automated, and code-free quantification of phage lytic dynamics from microplate growth-curve data
-
-**susiR** is an open-source R package and interactive Shiny application that automates the quantification of bacteriophage lytic dynamics without writing any R code.
-
-# susiR
-
-**susiR** computes four complementary indices of bacteriophage lytic activity from microplate (optical density) growth-curve time-course data:
+susiR computes four complementary indices of bacteriophage lytic activity from optical density (OD) time-course data:
 
 - **SusI** (Sustainability Index) — duration and depth of lysis suppression, from lysis onset (`t0`) to resistance emergence (`ti`)
 - **VI** (Virulence Index) — early infection dynamics, following Storms et al. (2020)
 - **SupI** (Suppression Index) — overall growth suppression over a defined observation window, following Kim et al. (2024)
 - **ti/tc** — a time-ratio metric relating suppression duration to the control culture's normal growth cycle
 
-susiR is the companion software for the Sustainability Index manuscript (Kaneko et al., in preparation). Unlike the original analysis scripts developed for that study, susiR makes no assumptions about experimental design: the number of conditions, their labels, and the number and layout of biological replicates are inferred from a user-supplied sample-mapping table at run time, so the same code can handle different plate layouts without modification.
+susiR is the companion software for the Sustainability Index manuscript (Kaneko et al., in preparation). Unlike original custom analysis scripts, susiR makes no assumptions about experimental design: the number of conditions, their labels, and the number and layout of biological replicates are inferred from a user-supplied sample-mapping table at run time, allowing the same pipeline to handle diverse plate layouts without modifying any code.
 
 ---
 

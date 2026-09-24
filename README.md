@@ -1,3 +1,12 @@
+# susiR <img src="man/figures/logo.png" align="right" height="139" />
+
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/Tomoyoshi-Kaneko/susiR/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/Tomoyoshi-Kaneko/susiR/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<!-- badges: end -->
+
+**susiR** is an R package and interactive Shiny application for automating the quantification of phage lytic dynamics...
+
 # susiR
 
 **susiR** computes four complementary indices of bacteriophage lytic activity from microplate (optical density) growth-curve time-course data:

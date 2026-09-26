@@ -17,6 +17,10 @@ susiR is the companion software for the Sustainability Index manuscript (Kaneko 
 
 If you are not familiar with R or programming, **you do not need to install anything to try susiR**.
 
+### New to susiR? Start with the visual guide
+
+A short slide-deck walkthrough (with screenshots for every step) is available at [`docs/HowToUse.pdf`](docs/HowToUse.pdf).
+
 ### Use the web application
 
 Open the susiR web application in your browser:
@@ -90,7 +94,7 @@ The default mapping sheet is named `name`. It contains one row per well.
 
 | Column | Required? | Meaning |
 |---|---|---|
-| `num` | Yes | Well ID; must match a column in the OD sheet |
+| `well` | Yes | Well ID; must match a column in the OD sheet |
 | `sample` | Yes | Condition label; any text is allowed |
 | `bio_rep` | No | Explicit biological-replicate ID |
 

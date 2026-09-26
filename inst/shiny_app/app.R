@@ -42,17 +42,7 @@ default_params <- susi_default_params()
 # UI
 # ============================================================================
 ui <- fluidPage(
-  titlePanel(
-    div(
-      style = "display: flex; align-items: center;",
-      tags$img(src = "logo.png", height = "60px", style = "margin-right: 15px;"),
-      div(
-        h2("susiR", style = "margin: 0; font-weight: bold; color: #8E1728;"), # 早稲田エンジ色
-        h5("phage lytic activity analysis", style = "margin: 0; color: #555;")
-      )
-    ),
-    windowTitle = "susiR — phage lytic activity analysis"
-  ),
+  titlePanel("susiR — phage lytic activity analysis"),
   tags$head(tags$style(HTML("
     summary.susi-toggle {
       cursor: pointer; padding: 8px 12px; margin-bottom: 8px;
@@ -270,7 +260,7 @@ server <- function(input, output, session) {
     tagList(
       selectInput("od_sheet", "OD sheet name", choices = sn, selected = od_sel),
       selectInput("map_sheet", "Mapping sheet name", choices = sn, selected = map_sel),
-      textInput("well_col", "Well-ID column", value = "num"),
+      textInput("well_col", "Well-ID column", value = "well"),
       textInput("condition_col", "Condition-label column", value = "sample"),
       textInput("bio_rep_col", "Biological-replicate column (optional)", value = "bio_rep"),
       numericInput("tech_reps", "Max wells per biological replicate (fallback)", value = 12, min = 1),
@@ -408,7 +398,7 @@ server <- function(input, output, session) {
         if (is.na(samp) || !nzchar(trimws(samp))) next
         grp <- g[r, cc]; br <- b[r, cc]
         rows[[length(rows) + 1]] <- data.frame(
-          num = wid, sample = trimws(samp),
+          well = wid, sample = trimws(samp),
           host = if (!is.na(grp) && nzchar(trimws(grp))) trimws(grp) else NA_character_,
           bio_rep = if (!is.na(br) && nzchar(trimws(br))) trimws(br) else NA_character_,
           stringsAsFactors = FALSE
@@ -501,7 +491,7 @@ server <- function(input, output, session) {
     withProgress(message = "Running susiR...", value = 0.3, {
       run_susi(file_path(),
                od_sheet = input$od_sheet %||% "R", map_sheet = input$map_sheet %||% "name",
-               well_col = input$well_col %||% "num", condition_col = input$condition_col %||% "sample",
+               well_col = input$well_col %||% "well", condition_col = input$condition_col %||% "sample",
                bio_rep_col = input$bio_rep_col %||% "bio_rep",
                host_col = host_col_effective(),
                tech_reps_per_bio_rep = input$tech_reps %||% 12,
@@ -517,7 +507,7 @@ server <- function(input, output, session) {
     withProgress(message = "Building overview plot...", value = 0.7, {
       plot_all_conditions(file_path(),
                            od_sheet = input$od_sheet %||% "R", map_sheet = input$map_sheet %||% "name",
-                           well_col = input$well_col %||% "num", condition_col = input$condition_col %||% "sample",
+                           well_col = input$well_col %||% "well", condition_col = input$condition_col %||% "sample",
                            bio_rep_col = input$bio_rep_col %||% "bio_rep",
                            host_col = host_col_effective(),
                            tech_reps_per_bio_rep = input$tech_reps %||% 12,
@@ -530,7 +520,7 @@ server <- function(input, output, session) {
   diag <- eventReactive(input$run, {
     diagnose_conditions(file_path(),
                          od_sheet = input$od_sheet %||% "R", map_sheet = input$map_sheet %||% "name",
-                         well_col = input$well_col %||% "num", condition_col = input$condition_col %||% "sample",
+                         well_col = input$well_col %||% "well", condition_col = input$condition_col %||% "sample",
                          bio_rep_col = input$bio_rep_col %||% "bio_rep",
                          host_col = host_col_effective(),
                          tech_reps_per_bio_rep = input$tech_reps %||% 12,
@@ -544,7 +534,7 @@ server <- function(input, output, session) {
   combined <- eventReactive(input$run, {
     plot_combined_curves(file_path(),
                           od_sheet = input$od_sheet %||% "R", map_sheet = input$map_sheet %||% "name",
-                          well_col = input$well_col %||% "num", condition_col = input$condition_col %||% "sample",
+                          well_col = input$well_col %||% "well", condition_col = input$condition_col %||% "sample",
                           bio_rep_col = input$bio_rep_col %||% "bio_rep",
                           host_col = host_col_effective(), host = if (isTRUE(input$use_host)) input$selected_host else NULL,
                           tech_reps_per_bio_rep = input$tech_reps %||% 12,
@@ -559,7 +549,7 @@ server <- function(input, output, session) {
   superplot_obj <- eventReactive(input$run, {
     plot_metric_superplot(file_path(),
                            od_sheet = input$od_sheet %||% "R", map_sheet = input$map_sheet %||% "name",
-                           well_col = input$well_col %||% "num", condition_col = input$condition_col %||% "sample",
+                           well_col = input$well_col %||% "well", condition_col = input$condition_col %||% "sample",
                            bio_rep_col = input$bio_rep_col %||% "bio_rep",
                            host_col = host_col_effective(), host = if (isTRUE(input$use_host)) input$selected_host else NULL,
                            tech_reps_per_bio_rep = input$tech_reps %||% 12,
@@ -594,7 +584,7 @@ server <- function(input, output, session) {
     req(input$detail_condition)
     plot_condition(file_path(), condition = input$detail_condition,
                     od_sheet = input$od_sheet %||% "R", map_sheet = input$map_sheet %||% "name",
-                    well_col = input$well_col %||% "num", condition_col = input$condition_col %||% "sample",
+                    well_col = input$well_col %||% "well", condition_col = input$condition_col %||% "sample",
                     bio_rep_col = input$bio_rep_col %||% "bio_rep",
                     host_col = host_col_effective(), host = if (isTRUE(input$use_host)) input$selected_host else NULL,
                     tech_reps_per_bio_rep = input$tech_reps %||% 12,

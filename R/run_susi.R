@@ -62,7 +62,7 @@
 #' @export
 run_susi <- function(file_path,
                       od_sheet = "R", map_sheet = "name",
-                      well_col = "num", condition_col = "sample", bio_rep_col = "bio_rep",
+                      well_col = "well", condition_col = "sample", bio_rep_col = "bio_rep",
                       host_col = NULL,
                       tech_reps_per_bio_rep = 12,
                       control_label = NULL, conditions = NULL, exclude = NULL, condition_order = NULL,

@@ -41,7 +41,7 @@
 #' @export
 plot_combined_curves <- function(file_path,
                                   od_sheet = "R", map_sheet = "name",
-                                  well_col = "num", condition_col = "sample", bio_rep_col = "bio_rep",
+                                  well_col = "well", condition_col = "sample", bio_rep_col = "bio_rep",
                                   host_col = NULL, host = NULL,
                                   tech_reps_per_bio_rep = 12,
                                   control_label = NULL, conditions = NULL, exclude = NULL, condition_order = NULL,
@@ -147,7 +147,12 @@ susi_bio_rep_palette <- function(bio_reps) {
 #' means share the same red/green/blue-style colour coding by replicate, so
 #' within-replicate (well-to-well) and between-replicate (day-to-day)
 #' variability are both visible at once, not just collapsed into a single
-#' error bar.
+#' error bar. The VI_local panel additionally shows, as a subtitle, the
+#' global VI (area-ratio across the MOI series, Storms et al. 2020) when
+#' applicable, or a note that it isn't (not a numeric MOI series) --
+#' otherwise this number only appears in `run_susi()$global_vi`, easy to
+#' miss for readers expecting Storms et al.'s original local-VI-vs-MOI
+#' construction to already be reflected in this view.
 #'
 #' @inheritParams run_susi
 #' @param metrics Which metric(s) to plot. A single metric returns one
@@ -156,7 +161,7 @@ susi_bio_rep_palette <- function(bio_reps) {
 #' @export
 plot_metric_superplot <- function(file_path, metrics = c("SusI", "VI_local", "SupI", "ti_tc"),
                                    od_sheet = "R", map_sheet = "name",
-                                   well_col = "num", condition_col = "sample", bio_rep_col = "bio_rep",
+                                   well_col = "well", condition_col = "sample", bio_rep_col = "bio_rep",
                                    host_col = NULL, host = NULL,
                                    tech_reps_per_bio_rep = 12,
                                    control_label = NULL, conditions = NULL, exclude = NULL, condition_order = NULL,
@@ -199,11 +204,19 @@ plot_metric_superplot <- function(file_path, metrics = c("SusI", "VI_local", "Su
   jd <- ggplot2::position_jitterdodge(jitter.width = 0.15, dodge.width = dodge_w, seed = 1)
   dg <- ggplot2::position_dodge(width = dodge_w)
 
+  ## Global VI/MV50 (Storms et al. 2020's area-ratio definition, computed
+  ## from local VI across the MOI series) is a separate number from the
+  ## per-condition "local VI" plotted here, and easy to miss if it's only
+  ## shown on another tab -- surface it directly above the VI_local panel
+  ## instead, since that is the one Storms-familiar readers will look at
+  ## first and expect to already reflect it.
+  gv <- if (!is.null(host_col)) reps_res$global_vi[[host]] else reps_res$global_vi
+
   one_panel <- function(metric) {
     se_col <- paste0(metric, "_se")
     cond_df$se <- if (se_col %in% names(cond_df)) cond_df[[se_col]] else NA_real_
 
-    ggplot2::ggplot() +
+    p <- ggplot2::ggplot() +
       ggplot2::geom_point(data = wells_df, ggplot2::aes(x = .data$condition, y = .data[[metric]], color = .data$bio_rep),
                            position = jd, shape = 16, size = 1.7, alpha = 0.55) +
       ggplot2::geom_point(data = reps_df, ggplot2::aes(x = .data$condition, y = .data[[metric]], color = .data$bio_rep),
@@ -217,6 +230,18 @@ plot_metric_superplot <- function(file_path, metrics = c("SusI", "VI_local", "Su
       ggplot2::theme_minimal(base_size = 10) +
       ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 30, hjust = 1),
                       plot.title = ggplot2::element_text(face = "bold"))
+
+    if (metric == "VI_local") {
+      subtitle_txt <- if (isTRUE(gv$applicable)) {
+        sprintf("Global VI = %.3f%s",
+                gv$VI, if (!is.null(gv$MV50) && !is.na(gv$MV50)) sprintf(", MV50 = %.3g", gv$MV50) else "")
+      } else {
+        "Global VI: not applicable (conditions aren't a numeric MOI series)"
+      }
+      p <- p + ggplot2::labs(subtitle = subtitle_txt) +
+        ggplot2::theme(plot.subtitle = ggplot2::element_text(size = 10.5, face = "italic", color = "#555555"))
+    }
+    p
   }
 
   panels <- lapply(metrics, one_panel)

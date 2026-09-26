@@ -24,7 +24,7 @@
 #' @param file_path Path to the `.xlsx` workbook.
 #' @param od_sheet Name of the OD time-course sheet. Default `"R"`.
 #' @param map_sheet Name of the sample-mapping sheet. Default `"name"`.
-#' @param well_col Column in `map_sheet` holding well IDs. Default `"num"`.
+#' @param well_col Column in `map_sheet` holding well IDs. Default `"well"`.
 #' @param condition_col Column in `map_sheet` holding condition/sample
 #'   labels. Default `"sample"`.
 #' @param bio_rep_col Column in `map_sheet` holding an explicit
@@ -47,7 +47,7 @@
 read_plate_data <- function(file_path,
                              od_sheet = "R",
                              map_sheet = "name",
-                             well_col = "num",
+                             well_col = "well",
                              condition_col = "sample",
                              bio_rep_col = "bio_rep",
                              tech_reps_per_bio_rep = 12,
@@ -190,7 +190,7 @@ read_plate_data <- function(file_path,
 #' @param mapping Sample-mapping data frame (as read from the workbook).
 #' @return `mapping` with an added `.bio_rep` integer column.
 #' @export
-susi_resolve_bio_rep <- function(mapping, well_col = "num", condition_col = "sample",
+susi_resolve_bio_rep <- function(mapping, well_col = "well", condition_col = "sample",
                                   bio_rep_col = "bio_rep", tech_reps_per_bio_rep = 12) {
   has_col <- bio_rep_col %in% names(mapping)
   explicit_vals <- if (has_col) mapping[[bio_rep_col]] else rep(NA, nrow(mapping))

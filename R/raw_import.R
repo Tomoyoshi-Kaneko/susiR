@@ -223,7 +223,7 @@ susi_import_raw <- function(file_path, output_path, sheet = NULL, time_unit = NU
   ok_rows <- !is.na(time_sec)
   out_od <- cbind(data.frame(Time = time_sec[ok_rows]), well_data[ok_rows, , drop = FALSE])
 
-  name_template <- data.frame(num = names(well_data), sample = "", bio_rep = "", stringsAsFactors = FALSE)
+  name_template <- data.frame(well = names(well_data), sample = "", bio_rep = "", stringsAsFactors = FALSE)
 
   wb <- openxlsx::createWorkbook()
   openxlsx::addWorksheet(wb, "R")

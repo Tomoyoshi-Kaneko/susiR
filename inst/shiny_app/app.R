@@ -42,7 +42,17 @@ default_params <- susi_default_params()
 # UI
 # ============================================================================
 ui <- fluidPage(
-  titlePanel("susiR — phage lytic activity analysis"),
+  titlePanel(
+    div(
+      style = "display: flex; align-items: center;",
+      tags$img(src = "logo.png", height = "60px", style = "margin-right: 15px;"),
+      div(
+        h2("susiR", style = "margin: 0; font-weight: bold; color: #8E1728;"), # 早稲田エンジ色
+        h5("phage lytic activity analysis", style = "margin: 0; color: #555;")
+      )
+    ),
+    windowTitle = "susiR — phage lytic activity analysis"
+  ),
   tags$head(tags$style(HTML("
     summary.susi-toggle {
       cursor: pointer; padding: 8px 12px; margin-bottom: 8px;

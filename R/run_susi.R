@@ -170,6 +170,18 @@ run_susi <- function(file_path,
   if (verbose) message("Conditions to analyze (", length(conds), "): ", paste(conds, collapse = ", "))
 
   wide_curve <- function(df, value_col = "od") {
+    ## A caller may legitimately pass a zero-row slice (e.g. a bio_rep id
+    ## that exists on one side -- treated -- but not the other -- control,
+    ## see below). stats::aggregate() errors outright ("no rows to
+    ## aggregate") on an empty model frame instead of returning an empty
+    ## result, which would otherwise abort the whole host/condition with an
+    ## unhelpful, generic error. Returning a typed empty data frame lets
+    ## callers that already check `nrow(...) == 0` (e.g. the
+    ## biological_replicates loop below) keep working as intended.
+    if (nrow(df) == 0 || all(is.na(df[[value_col]]))) {
+      empty <- stats::setNames(data.frame(numeric(0), numeric(0)), c("time_h", value_col))
+      return(empty)
+    }
     stats::aggregate(as.formula(paste(value_col, "~ time_h")), data = df, FUN = mean, na.rm = TRUE)
   }
 
@@ -177,6 +189,20 @@ run_susi <- function(file_path,
   control_mean_overall <- wide_curve(control_all)
   tc_overall <- susi_detect_tc(control_mean_overall$time_h, control_mean_overall$od, params)
   effective_end_time <- if (!is.null(params$time_limit_hours)) min(tc_overall$tc, params$time_limit_hours) else tc_overall$tc
+
+  ## Biological-replicate ids for the control condition, used below to decide
+  ## how a treated bio_rep is paired with its control. Two real layouts are
+  ## both common and both need to work: (1) the validated MOI-series design,
+  ## where control and treated each have the SAME number of independently
+  ## cultured biological replicates and are paired 1:1 by matching id; and
+  ## (2) a multi-strain/host-range screen, where plate space is limited and
+  ## only ONE no-phage control well is run per host while the phage-treated
+  ## side still has several (e.g. 3) replicate wells. In case (2) there is
+  ## only ever one control curve to compare against, so every treated
+  ## bio_rep is paired with that same single control rather than being
+  ## dropped for "not having a matching id" -- which, before this fix, meant
+  ## every bio_rep except a coincidental id match was silently discarded.
+  control_bio_reps_all <- sort(unique(control_all$bio_rep[!is.na(control_all$bio_rep)]))
 
   summary_rows <- list()
   diag_rows <- list()
@@ -226,7 +252,8 @@ run_susi <- function(file_path,
       per_rep <- list()
       for (br in bio_reps) {
         treated_mean <- wide_curve(od_long[od_long$condition == cond & od_long$bio_rep == br, ])
-        control_mean_br <- wide_curve(control_all[control_all$bio_rep == br, ])
+        control_br_id <- if (length(control_bio_reps_all) == 1) control_bio_reps_all else br
+        control_mean_br <- wide_curve(control_all[control_all$bio_rep == control_br_id, ])
         if (nrow(control_mean_br) == 0) {
           if (verbose) message("  [", cond, " / bio_rep ", br, "] no matching control replicate -- skipped.")
           next

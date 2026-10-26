@@ -202,6 +202,15 @@ susi_resolve_bio_rep <- function(mapping, well_col = "well", condition_col = "sa
   explicit_used <- character(0)
 
   for (cond in conditions) {
+    ## A blank/NA condition label (e.g. a media-only "LB" blank well that was
+    ## deliberately given no condition so it's excluded from analysis) is not
+    ## a real condition to resolve replicates for. Without this guard,
+    ## `mapping[[condition_col]] == cond` with `cond = NA` evaluates to NA
+    ## for every row (R's `==` never matches NA), so `which()` returns an
+    ## empty index -- which then makes `all(logical(0))` vacuously TRUE and
+    ## misreports the NA group as having had its replicates taken directly
+    ## from a fully-blank bio_rep column.
+    if (is.na(cond)) next
     idx <- which(mapping[[condition_col]] == cond)
     vals <- explicit_vals[idx]
     any_given <- any(!is.na(vals) & vals != "")
